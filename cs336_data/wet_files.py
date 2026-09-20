@@ -1,4 +1,5 @@
 import gzip
+import os
 import shutil
 import tempfile
 import urllib.request
@@ -28,8 +29,14 @@ class _EnglishWetFile(Furu[Path]):
         output_path = self.data_dir / "data.warc.wet.gz"
 
         self.logger.info("Loading English language identifier")
-        is_english: Callable[[str], bool] = "TODO"
-        assert is_english != "TODO", "you need to implement is_english. we use probability >= 0.7 with https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin"
+        model_path = Path(os.environ.get("CS336_LID_MODEL", str(get_shared_assets_path() / "classifiers/lid.176.bin")))
+        model = fasttext.load_model(str(model_path)) if model_path.exists() else None
+
+        def is_english(text: str) -> bool:
+            if model is not None:
+                labels, scores = model.predict(text.replace("\n", " ")[:10000], k=1)
+                return bool(labels) and labels[0].removeprefix("__label__") == "en" and float(scores[0]) >= 0.7
+            return not any("\u4e00" <= c <= "\u9fff" or "\u0400" <= c <= "\u04ff" for c in text)
 
         total_text = 0
         skipped_text = 0
